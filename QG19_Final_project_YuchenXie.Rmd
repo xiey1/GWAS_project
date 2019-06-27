@@ -1,0 +1,684 @@
+---
+title: "QG_Final_project"
+author: "Yuchen Xie"
+date: "5/1/2019"
+output: html_document
+---
+
+# 0. Read files and check the basic info for each file
+```{r}
+library(ggplot2)
+library(HardyWeinberg)
+library(ggfortify)
+library(MASS)
+library(dplyr)
+library(reshape2)
+library("gridExtra")
+geno <- read.csv('./data_files/genotypes.csv', stringsAsFactors = FALSE, header = TRUE, row.names = 1)   ## 344 50000
+pheno <- read.csv('./data_files/phenotypes.csv', stringsAsFactors = FALSE, header = TRUE, row.names = 1)   ## 344   5
+covar <- read.csv('./data_files/covars.csv', stringsAsFactors = FALSE, header = TRUE, row.names = 1)   ## 344   2
+
+## Check the rownames of geno, pheno and covar files are consistent
+sum(rownames(geno) == rownames(pheno))   ## 344
+sum(rownames(geno) == rownames(covar))   ## 344
+```
+
+calculate the number of samples n and the numebr of SNPs N
+```{r}
+n = dim(geno)[1]
+N = dim(geno)[2]
+```
+
+make sure the genotype file looks good
+```{r}
+geno[1:6,1:6]
+```
+
+make sure the phenotype file looks good
+```{r}
+head(pheno)
+```
+
+make sure the covar file looks good
+```{r}
+head(covar)
+```
+The gene name for the genes measured in the phenotype file
+```{r}
+symbol <- c('ERAP2', 'PEX6', 'FAHD1', 'GFM1', 'MARCH7')
+```
+
+
+# 1. Check the distribution of the phenotype file
+## 1.1 check the distribution of relative gene expression for each gene
+
+```{r}
+for (i in 1:dim(pheno)[2]){
+  p <- ggplot(pheno, aes(x=pheno[,i])) + geom_density()
+  p <- p + ggtitle(paste0('density plot for gene',i,'_' ,symbol[i]))
+  p <- p + xlab(paste0(symbol[i], '_relative expression'))
+  plot(p)
+  ggsave(paste0('./gene',i,'_expr_density.pdf'), width=4, height=3)
+}
+```
+
+
+## 1.2 Check the distribution of genotype conditional on population structure
+### 1.2.1 Generate table for sample number of each population/gender
+```{r}
+geno_covar <- merge(geno, covar, by = 'row.names')
+rownames(geno_covar) <- geno_covar$Row.names
+geno_covar <- geno_covar[,-1]
+geno_covar$pop_sex <- interaction(geno_covar$Population, geno_covar$Sex)
+table(geno_covar$pop_sex)
+```
+
+```{r}
+pheno_covar <- merge(pheno, covar, by = 'row.names')
+rownames(pheno_covar) <- pheno_covar$Row.names
+pheno_covar <- pheno_covar[,-1]
+pheno_covar$pop_sex <- interaction(pheno_covar$Population, pheno_covar$Sex)
+table(pheno_covar$pop_sex)
+```
+
+### 1.2.2 PCA plot for genotype distribution conditional on population structure
+```{r}
+df <- geno_covar[,c(1:50000)]
+autoplot(prcomp(df), data = geno_covar, colour = 'Population', main = 'PCA plot_genotype -- population')
+ggsave(paste0('./PCA plot_genotype -- population.pdf'), width=6, height=4)
+autoplot(prcomp(df), data = geno_covar, colour = 'Sex', main = 'PCA plot_genotype -- gender')
+ggsave(paste0('./PCA plot_genotype -- gender.pdf'), width=6, height=4)
+autoplot(prcomp(df), data = geno_covar, colour = 'pop_sex', main = 'PCA plot_genotype -- population & gender')
+ggsave(paste0('./PCA plot_genotype -- population & gender.pdf'), width=6, height=4)
+```
+
+```{r}
+#pca.result <- prcomp(geno)
+#pca.result$sdev
+#summary(pca.result)
+#pcaDf <- data.frame(pc1=pca.result$x[,1], pc2=pca.result$x[,2])
+#ggplot(pcaDf,aes(pc1,pc2)) + geom_point() + ggtitle("Genotypes with Population Structure")
+```
+
+## 1.3 Check the distribution of the phenotype conditional on population structure
+### 1.3.1 Density plot of phenotype data conditional on population/gender
+```{r}
+for (i in 1:dim(pheno)[2]){
+  p1 <- ggplot(pheno_covar, aes(x=pheno_covar[,i], colour=Population)) + geom_density() + xlab(paste0(symbol[i], '_relative expression'))
+  p1 <- p1 + ggtitle(paste0('density plot for gene',i,'_' ,symbol[i], ' by population'))
+  plot(p1)
+  ggsave(paste0('density plot for gene',i,'_' ,symbol[i], ' by population.pdf'), width=5, height=4)
+  
+  p2 <- ggplot(pheno_covar, aes(x=pheno_covar[,i], colour=Sex)) + geom_density() + xlab(paste0(symbol[i], '_relative expression'))
+  p2 <- p2 + ggtitle(paste0('density plot for gene',i,'_' ,symbol[i], ' by gender'))
+  plot(p2)
+  ggsave(paste0('density plot for gene',i,'_' ,symbol[i], ' by gender.pdf'), width=5, height=4)
+  
+  p3 <- ggplot(pheno_covar, aes(x=pheno_covar[,i], colour=pop_sex)) + geom_density() + xlab(paste0(symbol[i], '_relative expression'))
+  p3 <- p3 + ggtitle(paste0('density plot for gene',i,'_' ,symbol[i], ' by population & gender'))
+  plot(p3)
+  ggsave(paste0('density plot for gene',i,'_' ,symbol[i], ' by population and gender.pdf'), width=5, height=4)
+}
+```
+
+
+### 1.3.2 PCA plot of phenotype data conditional on population/gender
+```{r}
+df <- pheno_covar[,c(1:5)]
+autoplot(prcomp(df), data = pheno_covar, colour = 'Population', main = 'PCA plot_phenotype -- population')
+ggsave(paste0('./PCA plot_phenotype -- population.pdf'), width=6, height=4)
+autoplot(prcomp(df), data = pheno_covar, colour = 'Sex', main = 'PCA plot_pheno -- gender')
+ggsave(paste0('./PCA plot_phenotype -- gender.pdf'), width=6, height=4)
+autoplot(prcomp(df), data = pheno_covar, colour = 'pop_sex', main = 'PCA plot_pheno -- population & gender')
+ggsave(paste0('./PCA plot_phenotype -- population & gender.pdf'), width=6, height=4)
+```
+
+
+## 1.4 Check minor allele frequency
+```{r}
+maf_cal <- function(geno_col){
+  x = sum(geno_col)/(2*length(geno_col))
+  if (x >= 0.5){
+    return(1-x)
+  } else if (x < 0.5){
+    return(x)
+  }
+}
+
+maf <- apply(geno, 2, maf_cal)
+sum(maf > 0.05)
+
+p <- ggplot() + geom_histogram(aes(x = maf), color = 'black', fill = "darkblue", bins = 100)
+p <- p + xlab('minor allele frequency')
+p <- p + ylab('counts')
+p <- p + ggtitle('Histogram for the minor allele frequency')
+p
+ggsave(paste0('./MAF.pdf'), width=6, height=4)
+```
+
+
+# 2. Linear regression model
+```{r}
+xa_converter <- function(x){
+  if (x == 0){
+    return(-1)
+  } else if (x == 1) {
+    return(0)
+  } else if (x == 2){
+    return(1)
+  } 
+}
+
+xd_converter <- function(x){
+  if (x == 0 | x == 2){
+    return(-1)
+  } else if (x == 1){
+    return(1)
+  }
+}
+
+Xa <- matrix(0, nrow = dim(geno)[1], ncol = dim(geno)[2])
+Xd <- matrix(0, nrow = dim(geno)[1], ncol = dim(geno)[2])
+
+for (i in c(1:N)){
+  if (sum(geno[,i]/(2*n)) >= 0.5) {
+    Xa[,i] <- sapply(geno[,i], xa_converter)
+  } else if (sum(geno[,i]/(2*n)) < 0.5) {
+    Xa[,i] <- sapply(geno[,i], xa_converter)
+    Xa[,i] <- Xa[,i] * (-1)
+  }
+}
+
+Xd <- apply(geno, 1:2, xd_converter)
+colnames(Xd) <- NULL
+rownames(Xd) <- NULL
+```
+
+```{r}
+pval_F_statistic <- function(Xa, Xd, y) {
+  output <- as.numeric()
+  for (i in 1:N){
+    x <- matrix(c(matrix(1, nrow = n), Xa[,i], Xd[,i]), nrow = n)
+    y <- matrix(y, nrow = n)
+    MLE <- ginv(t(x)%*%x)%*%t(x)%*%y
+    y_pred <- x%*%MLE
+    SSM <- sum((y_pred-mean(y))^2)
+    DFM <- 3-1
+    SSE <- sum((y_pred-y)^2)
+    DFE <- n-3
+    MSM <- SSM/DFM
+    MSE <- SSE/DFE
+    F <- MSM/MSE
+    output[i] <- pf(F, 2, n-3, lower.tail = FALSE)
+  }
+  return(output)
+}
+```
+
+```{r}
+pval_mx1 <- matrix(0,nrow = dim(geno)[2], ncol = dim(pheno)[2])
+pval_df1 <- as.data.frame(pval_mx1)
+rownames(pval_df1) <- colnames(geno)
+colnames(pval_df1) <- colnames(pheno)
+for (i in 1:dim(pheno)[2]){
+  pval_df1[,i] <- pval_F_statistic(Xa, Xd, pheno[,i])
+}
+```
+
+p-value heatmap
+```{r}
+autoplot(pval_mx1, main = 'p-value heatmap for linear regression model without covariates')
+ggsave(paste0('./p-value heatmap_1.pdf'), width=6, height=4)
+```
+
+
+## 2.1 Manhattan plot
+
+```{r}
+snp <- read.csv('./data_files/SNP_info.csv', header = TRUE, stringsAsFactors = FALSE)
+sum(snp$id == colnames(geno))
+sum(snp$id == rownames(pval_df1))
+rownames(snp) <- snp$id
+pval_df1 <- merge(pval_df1, snp, by = 'row.names', sort = FALSE)
+rownames(pval_df1) <- pval_df1$Row.names
+pval_df1 <- pval_df1[,-1]
+pval_df1$chr <- as.factor(paste0('chr',pval_df1$chromosome))
+```
+
+
+```{r}
+pval_df1$locus = c(1:N)
+for (i in 1:5){
+  p <- ggplot(data = pval_df1) + geom_point(aes(x = locus, y = -log10(pval_df1[,i]), color = chr), size = 1)
+  p <- p + xlab("locus")
+  p <- p + ylab("-log10(p-value)")
+  p <- p + ggtitle(paste0('Manhattan Plot for gene',i,'_' , symbol[i]))
+  p <- p + geom_hline(yintercept = -log10(0.05/N), color = 'red')
+  plot(p)
+  ggsave(paste0('./gene',i,'_', symbol[i],'_manhattan_plot.pdf'), width=12, height=3)
+}
+```
+compute the potential causal SNPs for each gene 
+```{r}
+gene1_sig <- rownames(pval_df1)[which(pval_df1[,1] < 0.05/N)]   ##ENSG00000164308.12_ERAP2
+gene1_sig_idx <- which(pval_df1[,1] < 0.05/N)
+length(gene1_sig)
+gene2_sig <- rownames(pval_df1)[which(pval_df1[,2] < 0.05/N)]   ## ENSG00000124587.9_PEX6
+gene2_sig_idx <- which(pval_df1[,2] < 0.05/N)
+length(gene2_sig)
+gene3_sig <- rownames(pval_df1)[which(pval_df1[,3] < 0.05/N)]   ## ENSG00000180185.7_FAHD1
+gene3_sig_idx <- which(pval_df1[,3] < 0.05/N)
+length(gene3_sig)
+gene4_sig <- rownames(pval_df1)[which(pval_df1[,4] < 0.05/N)]   ## ENSG00000168827.9_GFM1
+gene4_sig_idx <- which(pval_df1[,4] < 0.05/N)
+length(gene4_sig)
+gene5_sig <- rownames(pval_df1)[which(pval_df1[,5] < 0.05/N)]   ## ENSG00000136536.9_MARCH7
+gene5_sig_idx <- which(pval_df1[,5] < 0.05/N)
+length(gene5_sig)
+```
+
+
+## 2.2 QQ-plot
+```{r}
+#pval_df1$expected_pval = sort(-log10(seq(0,1,length.out = N)))
+expected_pval = sort(-log10(seq(0,1,length.out = N)))
+for (i in 1:dim(pheno)[2]){
+  p <- ggplot() + geom_point(aes(x = expected_pval, y = sort(-log10(pval_df1[,i]))))
+  p <- p + xlab("-log10(expected p-values)")
+  p <- p + ylab("-log10(observed p-values)")
+  p <- p + ggtitle(paste0("QQ plot for gene",i,'_' , symbol[i]))
+  p <- p + geom_abline(slope = 1, intercept = 0, color = 'red')
+  plot(p)
+  ggsave(paste0('./gene',i,'_',symbol[i],'_QQ_plot.pdf'), width=5, height=4)
+}
+```
+
+```{r}
+for (i in 1:3){
+  p <- ggplot() + geom_point(aes(x = expected_pval, y = sort(-log10(pval_df1[,i]))))
+  p <- p + xlab("-log10(expected p-values)")
+  p <- p + ylab("-log10(observed p-values)")
+  p <- p + ggtitle(paste0("QQ plot for gene",i,'_', symbol[i]))
+  p <- p + geom_abline(slope = 1, intercept = 0, color = 'red')
+  p <- p + ylim(c(0,10))
+  plot(p)
+  ggsave(paste0('./gene',i,'_', symbol[i], '_QQ_plot_2.pdf'), width=5, height=4)
+}
+```
+
+# 3. Linear regression model and include covariates to model the population structure and gender
+```{r}
+pval_calculator_lab10 <- function(pheno_input, xa_input, xd_input, z_input){
+    n_samples <- dim(Xa)[1]
+    
+    # Set up random variables for null (Z_mx) and with genotypes (XZ_mx)
+    Z_mx <- cbind(1,z_input)                                          # H0 (w/ covariates)
+    XZ_mx <- cbind(1,xa_input,xd_input,z_input)                       # w/ genotypes too
+    
+    # Calculate MLE betas for both null model and model with genotypes and covariates
+    MLE_beta_theta0 <- ginv(t(Z_mx)  %*% Z_mx)  %*% t(Z_mx)  %*% pheno_input 
+    MLE_beta_theta1 <- ginv(t(XZ_mx) %*% XZ_mx) %*% t(XZ_mx) %*% pheno_input
+    
+    # Get Y estimates using the betas calculated above to give each hypothesis its best chance
+    y_hat_theta0 <- Z_mx  %*% MLE_beta_theta0
+    y_hat_theta1 <- XZ_mx %*% MLE_beta_theta1
+    
+    # Get the variance between the true phenotype values and our estimates under each hypothesis
+    SSE_theta0 <- sum((pheno_input - y_hat_theta0)^2)
+    SSE_theta1 <- sum((pheno_input - y_hat_theta1)^2)
+    
+    # Set degrees of freedom
+    df_M <- 2
+    df_E <- n_samples - 3
+    
+    # Put together calculated terms to get Fstatistic
+    Fstatistic <- ((SSE_theta0-SSE_theta1)/df_M) / (SSE_theta1/df_E)
+    
+    # Determine pval of the Fstatistic
+    pval <- pf(Fstatistic, df_M, df_E,lower.tail = FALSE)
+    return(pval)
+}
+```
+
+```{r}
+covar$GBR <- ifelse(covar$Population == 'GBR',1,0)
+covar$FIN <- ifelse(covar$Population == 'FIN',1,0)
+covar$CEU <- ifelse(covar$Population == 'CEU',1,0)
+covar$TSI <- ifelse(covar$Population == 'TSI',1,0)
+covar$MALE <- ifelse(covar$Sex == 'MALE',1,0)
+covar$FEMALE <- ifelse(covar$Sex == 'FEMALE',1,0)
+Xz = as.matrix(covar[,c(3:8)])
+```
+
+```{r}
+pval_mx2 <- matrix(0,nrow = dim(geno)[2], ncol = dim(pheno)[2])
+pval_df2 <- as.data.frame(pval_mx2)
+rownames(pval_df2) <- colnames(geno)
+colnames(pval_df2) <- colnames(pheno)
+for (i in 1:dim(pheno)[2]){
+  for (j in 1:dim(geno)[2]){
+    pval <- pval_calculator_lab10(pheno[,i], Xa[,j], Xd[,j], Xz)
+    pval_df2[j,i] <- pval
+  }
+}
+```
+
+```{r}
+autoplot(pval_mx2, main = 'p-value heatmap for linear regression model with covariates')
+ggsave(paste0('./p-value heatmap_2.pdf'), width=6, height=4)
+```
+
+## 3.1 Manhattan plot
+
+```{r}
+rownames(pval_df2) <- colnames(geno)
+pval_df2 <- merge(pval_df2, snp, by = 'row.names', sort = FALSE)
+rownames(pval_df2) <- pval_df2$Row.names
+pval_df2 <- pval_df2[,-1]
+pval_df2$chr <- as.factor(paste0('chr',pval_df2$chromosome))
+```
+
+```{r}
+pval_df2$locus = c(1:N)
+for (i in 1:dim(pheno)[2]){
+  p <- ggplot(data = pval_df2) + geom_point(aes(x = locus, y = -log10(pval_df2[,i]), color = chr))
+  p <- p + xlab("locus")
+  p <- p + ylab("-log10(p-value)")
+  p <- p + ggtitle(paste0('Manhattan Plot for gene',i,'_' , symbol[i], ' after modeling covariates'))
+  p <- p + geom_hline(yintercept = -log10(0.05/N), color = 'red')
+  plot(p)
+  ggsave(paste0('./gene',i,'_', symbol[i],'_manhattan_plot_covar.pdf'), width=12, height=3)
+}
+```
+compute the potential causal SNPs for each gene
+```{r}
+gene1_sig_covar <- rownames(pval_df2)[which(pval_df2[,1] < 0.05/N)]   ##ENSG00000164308.12_ERAP2
+gene1_sig_idx_covar <- which(pval_df2[,1] < 0.05/N)
+length(gene1_sig_covar)
+gene2_sig_covar <- rownames(pval_df2)[which(pval_df2[,2] < 0.05/N)]   ## ENSG00000124587.9_PEX6
+gene2_sig_idx_covar <- which(pval_df2[,2] < 0.05/N)
+length(gene2_sig_covar)
+gene3_sig_covar <- rownames(pval_df2)[which(pval_df2[,3] < 0.05/N)]   ## ENSG00000180185.7_FAHD1
+gene3_sig_idx_covar <- which(pval_df2[,3] < 0.05/N)
+length(gene3_sig_covar)
+gene4_sig_covar <- rownames(pval_df2)[which(pval_df2[,4] < 0.05/N)]   ## ENSG00000168827.9_GFM1
+gene4_sig_idx_covar <- which(pval_df2[,4] < 0.05/N)
+length(gene4_sig_covar)
+gene5_sig_covar <- rownames(pval_df2)[which(pval_df2[,5] < 0.05/N)]   ## ENSG00000136536.9_MARCH7
+gene5_sig_idx_covar <- which(pval_df2[,5] < 0.05/N)
+length(gene5_sig_covar)
+```
+
+## 3.2 QQ-plot
+```{r}
+expected_pval = sort(-log10(seq(0,1,length.out = N)))
+for (i in 1:dim(pheno)[2]){
+  p <- ggplot() + geom_point(aes(x = expected_pval, y = sort(-log10(pval_df2[,i]))))
+  p <- p + xlab("-log10(expected p-values)")
+  p <- p + ylab("-log10(observed p-values)")
+  p <- p + ggtitle(paste0("QQ plot for gene",i,'_' , symbol[i], ' after modeling covariates'))
+  p <- p + geom_abline(slope = 1, intercept = 0, color = 'red')
+  plot(p)
+  ggsave(paste0('./gene',i,'_', symbol[i],'_QQ_plot_covar.pdf'), width=5, height=4)
+}
+```
+
+```{r}
+for (i in 1:3){
+  p <- ggplot(data = pval_df2) + geom_point(aes(x = expected_pval, y = sort(-log10(pval_df2[,i]))))
+  p <- p + xlab("-log10(expected p-values)")
+  p <- p + ylab("-log10(observed p-values)")
+  p <- p + ggtitle(paste0("QQ plot for gene",i,'_' , symbol[i], ' after modeling covariates'))
+  p <- p + geom_abline(slope = 1, intercept = 0, color = 'red')
+  p <- p + ylim(c(0,10))
+  plot(p)
+  ggsave(paste0('./gene',i, '_', symbol[i], '_QQ_plot_covar_2.pdf'), width=5, height=4)
+}
+```
+
+# 4. Further analyze the potential causal SNPs obtained from the linear regression model
+## 4.1 Hardy-Weinberg equilibrium test
+```{r}
+geno_HW <- as.numeric()
+Xa_1 <- Xa
+add_mx <- rbind(rep(-1,N), rep(0,N), rep(1,N))
+Xa_1 <- rbind(Xa_1, add_mx)
+Xa_1_summary <- apply(Xa_1, 2, table)   ## 14  59 271
+allele_mx <- matrix((unlist(Xa_1_summary)-1), nrow=dim(geno)[2], byrow=T)
+colnames(allele_mx) <- c('AA', 'AB', 'BB')
+Exact.pvalues <- HWExactStats(allele_mx,x.linked=FALSE)
+sum(Exact.pvalues < 0.05)
+idx <- which(Exact.pvalues > 0.05)
+```
+
+
+```{r}
+gene1_sig_HW <- intersect(gene1_sig_covar, colnames(geno)[idx])
+length(gene1_sig_HW)
+gene1_sig_HW_idx <- intersect(gene1_sig_idx_covar, idx)
+gene2_sig_HW <- intersect(gene2_sig_covar, colnames(geno)[idx])
+length(gene2_sig_HW)
+gene2_sig_HW_idx <- intersect(gene2_sig_idx_covar, idx)
+gene3_sig_HW <- intersect(gene3_sig_covar, colnames(geno)[idx])
+length(gene3_sig_HW)
+gene3_sig_HW_idx <- intersect(gene3_sig_idx_covar, idx)
+```
+
+## 4.2 Check the localization of the potential causal SNPs for each phenotype -- Local Manhattan plot
+```{r}
+pval_df2$gene1_sig <- ifelse(rownames(pval_df2)%in%gene1_sig_HW, 'sig', 'nosig')
+pval_df2$gene2_sig <- ifelse(rownames(pval_df2)%in%gene2_sig_HW, 'sig', 'nosig')
+pval_df2$gene3_sig <- ifelse(rownames(pval_df2)%in%gene3_sig_HW, 'sig', 'nosig')
+```
+
+### 4.2.1 gene1_ERAP2
+```{r}
+cols <- c('sig' = 'red', 'nosig' = "black")
+pval_df2_gene1_sig <- pval_df2[which(pval_df2$gene1_sig == 'sig'),]
+unique(pval_df2_gene1_sig$chromosome)   ## chr5
+p1 <- ggplot(data = pval_df2) + geom_point(aes(x = locus, y = -log10(pval_df2[,1]), color = gene1_sig))
+p1 <- p1 + scale_colour_manual(values = cols)
+p1 <- p1 + xlab("locus") + ylab("-log10(p-value)")
+p1 <- p1 + ggtitle('Manhattan Plot for gene1_ERAP2_local')
+p1 <- p1 + geom_hline(yintercept = -log10(0.05/N), color = 'red')
+p1 <- p1 + xlim(range(gene1_sig_HW_idx)[1]-100, range(gene1_sig_HW_idx)[2]+100)
+plot(p1)
+ggsave('./gene1_ERAP2_manhattan_plot_local.pdf', width=5, height=4)
+```
+
+```{r}
+gene1_sig_chr <- unique(pval_df2_gene1_sig$chromosome)
+gene1_sig_loc <- pval_df2_gene1_sig$position
+range(gene1_sig_loc)
+gene1_sig_loc_len <- range(gene1_sig_loc)[2] - range(gene1_sig_loc)[1]
+gene1_sig_loc_len
+print(paste0('The potential ', length(gene1_sig_loc), ' causal SNPs for gene1_ERAP2 are located on chromosome ', gene1_sig_chr, ', spans from ', range(gene1_sig_loc)[1], ' to ', range(gene1_sig_loc)[2], ', covers ', gene1_sig_loc_len, ' bp'))
+```
+
+### 4.2.2 gene1_PEX6
+```{r}
+cols <- c('sig' = 'red', 'nosig' = "black")
+pval_df2_gene2_sig <- pval_df2[which(pval_df2$gene2_sig == 'sig'),]
+unique(pval_df2_gene2_sig$chromosome)   ## chr4 & chr6  ## chr4:"rs6854915"
+p2 <- ggplot(data = pval_df2) + geom_point(aes(x = locus, y = -log10(pval_df2[,2]), color = gene2_sig))
+p2 <- p2 + scale_colour_manual(values = cols)
+p2 <- p2 + xlab("locus") + ylab("-log10(p-value)")
+p2 <- p2 + ggtitle('Manhattan Plot for gene2_PEX6_local')
+p2 <- p2 + geom_hline(yintercept = -log10(0.05/N), color = 'red')
+p2 <- p2 + xlim(range(gene2_sig_HW_idx)[1]-100, range(gene2_sig_HW_idx)[2]+100)
+plot(p2)
+ggsave('./gene2_PEX6_manhattan_plot_zoom_in.pdf', width=5, height=4)
+```
+
+```{r}
+cols <- c('sig' = 'red', 'nosig' = "black")
+p2 <- ggplot(data = pval_df2) + geom_point(aes(x = locus, y = -log10(pval_df2[,2]), color = gene2_sig))
+p2 <- p2 + scale_colour_manual(values = cols)
+p2 <- p2 + xlab("locus") + ylab("-log10(p-value)")
+p2 <- p2 + ggtitle('Manhattan Plot for gene2_PEX6_local_2')
+p2 <- p2 + geom_hline(yintercept = -log10(0.05/N), color = 'red')
+p2 <- p2 + xlim(range(gene2_sig_HW_idx[2:26])[1]-100, range(gene2_sig_HW_idx[2:26])[2]+100)
+plot(p2)
+ggsave('./gene2_PEX6_manhattan_plot_zoom_in_2.pdf', width=5, height=4)
+```
+
+```{r}
+gene2_sig_chr <- unique(pval_df2_gene2_sig[2:26,]$chromosome)
+gene2_sig_loc <- pval_df2_gene2_sig[c(2:26),]$position
+range(gene2_sig_loc)
+gene2_sig_loc_len <- range(gene2_sig_loc)[2] - range(gene2_sig_loc)[1]
+gene2_sig_loc_len
+print(paste0('The potential ', length(gene2_sig_loc), ' causal SNPs for gene2_PEX6 are located on chromosome ', gene2_sig_chr, ', spans from ', range(gene2_sig_loc)[1], ' to ', range(gene2_sig_loc)[2], ', covers ', gene2_sig_loc_len, ' bp'))
+```
+
+### 4.2.3 gene1_FADH1
+```{r}
+cols <- c('sig' = 'red', 'nosig' = "black")
+pval_df2_gene3_sig <- pval_df2[which(pval_df2$gene3_sig == 'sig'),]
+unique(pval_df2_gene3_sig$chromosome)   ## chr16
+p3 <- ggplot(data = pval_df2) + geom_point(aes(x = locus, y = -log10(pval_df2[,3]), color = gene3_sig))
+p3 <- p3 + scale_colour_manual(values = cols)
+p3 <- p3 + xlab("locus") + ylab("-log10(p-value)")
+p3 <- p3 + ggtitle('Manhattan Plot for gene3_FAHD1_local')
+p3 <- p3 + geom_hline(yintercept = -log10(0.05/N), color = 'red')
+p3 <- p3 + xlim(range(gene3_sig_HW_idx)[1]-100, range(gene3_sig_HW_idx)[2]+100)
+plot(p3)
+ggsave('./gene3_FAHD1_manhattan_plot_local.pdf', width=5, height=4)
+```
+
+```{r}
+gene3_sig_chr <- unique(pval_df2_gene3_sig$chromosome)
+gene3_sig_loc <- pval_df2_gene3_sig$position
+range(gene3_sig_loc)
+gene3_sig_loc_len <- range(gene3_sig_loc)[2] - range(gene3_sig_loc)[1]
+gene3_sig_loc_len
+print(paste0('The potential ', length(gene3_sig_loc), ' causal SNPs for gene3_FAHD1 are located on chromosome ', gene3_sig_chr, ', spans from ', range(gene3_sig_loc)[1], ' to ', range(gene3_sig_loc)[2], ', covers ', gene3_sig_loc_len, ' bp'))
+```
+
+## 4.3 LD heatmap
+```{r}
+LD_plot <- function(index, gene){
+  get_upper_tri <- function(cormat){
+    cormat[lower.tri(cormat)]<- NA
+    return(cormat)
+  }
+  
+  index1 <- range(index)[1]-50
+  index2 <- range(index)[2]+50
+  Xa_100 <- Xa[,c(index1:index2)]
+  num <- dim(Xa_100)[2]
+  corr_mx = matrix(0, nrow = num, ncol = num)
+  for (i in 1:num){
+    for (j in 1:num){
+      cor <- cor.test(Xa_100[,i], Xa_100[,j])
+      corr_mx[i,j] <- (cor$estimate)^2}}
+  
+  upper_tri <- get_upper_tri(corr_mx)
+  melted_cormat <- melt(upper_tri, na.rm = TRUE)
+  
+  p <- ggplot(data = melted_cormat, aes(Var2, Var1, fill = value))+ geom_tile()+ scale_fill_gradient2(low = "white", high = "red", limit = c(0,1), space = "Lab",name="r^2")
+  p <- p + theme(axis.text.x = element_text(angle = 45, vjust = 1, size = 12, hjust = 1), axis.title.x = element_blank(), axis.title.y = element_blank(), panel.grid.major = element_blank(), panel.border = element_blank(), panel.background = element_blank())+ coord_fixed() + geom_segment(aes(x = 50, y = 50, xend = num-50, yend = 50), size = 0.5) + geom_segment(aes(x = num-50, y = 50, xend = num-50, yend = num-50), size = 0.5)
+  p <- p + ggtitle(paste0('Correlation matrix for gene', gene, '_', symbol[gene]))
+  ggsave(paste0('./correlation matrix for gene',gene,'_', symbol[gene],'.pdf'), width=5, height=4)
+  plot(p)
+  return(corr_mx)
+}
+```
+
+### 4.3.1 gene1_ERAP2
+```{r}
+corr_mx1 <- LD_plot(gene1_sig_HW_idx,1)
+```
+2 LD regions
+1st covers 20 SNPs and 2nd covers 47 SNPs
+```{r}
+rownames(pval_df2_gene1_sig)[1]   ## "rs200641494"
+pval_df2_gene1_sig$position[1]   ## 96772432
+rownames(pval_df2_gene1_sig)[20]   ## "rs70981851"
+pval_df2_gene1_sig$position[20]   ## 96848898
+rownames(pval_df2_gene1_sig)[21]   ## "rs2549778"
+pval_df2_gene1_sig$position[21]   ## 96868550
+rownames(pval_df2_gene1_sig)[67]   ## "rs72777610"
+pval_df2_gene1_sig$position[67]   ## 97110808
+gene1_sig_SNP <- rownames(pval_df2_gene1_sig)[21:67]
+print('47 SNPs are identifed to be potential causal SNP for ERAP2')
+gene1_sig_SNP
+```
+
+### 4.3.2 gene1_PEX6
+```{r}
+corr_mx2 <- LD_plot(gene2_sig_HW_idx[2:26],2)
+```
+2 LD regions
+1st covers 13 SNPs and 2nd covers 11 SNPs
+```{r}
+pval_df2_gene2_sig$position[2]   ## 42889467
+pval_df2_gene2_sig$position[14]   ## 42946612
+pval_df2_gene2_sig$position[15]   ## 42949278
+pval_df2_gene2_sig$position[25]   ## 42977844
+pval_df2_gene2_sig$position[26]   ## 43108015
+gene2_sig_SNP <- rownames(pval_df2_gene2_sig)[15:25]
+print('11 SNPs are identifed to be potential causal SNP for PEX6')
+gene2_sig_SNP
+```
+
+
+calculate the correlation between the potential causal SNP for gene2_PEX6 in chr4 and the remaining 25 SNPs in chr6
+```{r}
+geno_gene2 <- geno[,gene2_sig_HW_idx]
+corr_2c = c()
+for (i in 1:26){
+  cor <- cor.test(geno_gene2[,i], geno_gene2[,1])
+  corr_2c <- c(corr_2c, (cor$estimate)^2)
+}
+corr_2c
+```
+
+### 4.3.3 gene1_FAHD1
+```{r}
+corr_mx3 <- LD_plot(gene3_sig_HW_idx,3)
+```
+
+```{r}
+gene3_sig_SNP <- rownames(pval_df2_gene3_sig)
+print('82 SNPs are identifed to be potential causal SNP for FAHD1')
+gene3_sig_SNP
+```
+
+
+# 5.Generate boxplot to view expression data conditional on each potential causal SNP
+```{r}
+#gene1_sig_HW_idx
+expr_plot <- function(gene, snp){
+  data <- data.frame('gene1_expr' = pheno[,gene], 'geno' = as.factor(geno[,snp]))
+  levels(data$geno) <- c('AA', 'AB', 'BB')
+  rownames(data) <- rownames(pheno)
+  p <- ggplot(data, aes(x = geno, y = gene1_expr, fill = geno)) + geom_boxplot() + geom_point(position=position_jitterdodge()) + ggtitle(paste0('Boxplot for expression of gene', gene, '_',symbol[gene],' at snp ', colnames(geno)[snp]))
+  p <- p + xlab('Genotype')
+  p <- p + ylab('Relative expression')
+  #plot(p)
+  ggsave(paste0('./gene',gene,'_',symbol[gene], ' at snp ', colnames(geno)[snp], '.pdf'), width=5, height=4)
+}
+
+#expr_plot(1,1)
+
+```
+
+```{r}
+for (i in 1:length(gene1_sig_HW_idx)){
+  expr_plot(1, gene1_sig_HW_idx[i])
+}
+```
+
+```{r}
+for (i in 1:length(gene2_sig_HW_idx)){
+  expr_plot(2, gene2_sig_HW_idx[i])
+}
+```
+
+```{r}
+for (i in 1:length(gene3_sig_HW_idx)){
+  expr_plot(3, gene3_sig_HW_idx[i])
+}
+```
+
