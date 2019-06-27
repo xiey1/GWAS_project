@@ -82,7 +82,7 @@ Find the positions of causal polymorphisms for the five expressed genes.
 ## 2.1 Manhattan plot
 <br>Manhattan plot was generated for p-values of each phenotype. Controlling a study-wide type I error of 0.05, using the Bonferroni correction and the p-value cutoff is calculated as α=0.05/N=0.05/50000=1e-06. Using this cutoff, gene1_ ERAP2 has 73 significant SNPs, gene2_ PEX6 has 29 significant SNPs, gene3_ FAHD1 has 90 significant SNPs, and gene4_ GFM1 and gene5_MARCH7 don’t have significant SNPs. The p-value cutoff is indicated as the red line in each Manhattan plot. 
 
-<img src='https://github.com/xiey1/GWAS_project/blob/master/images/Figure7_Manhattan_plot.png' width=900px>
+<img src='https://github.com/xiey1/GWAS_project/blob/master/images/Figure7_Manhattan_plot2.png' width=900px>
 
 ## 2.2 QQ-plot
 <br>QQ-plot is generated for each phenotype. For all 5 genes, the QQ-plot conforms to line y=x, suggesting that the null hypothesis is true for the majority of the SNPs. This indicates that the linear regression model works well for this study, consistent with the previous analysis that population structure may not largely affect the analysis.
